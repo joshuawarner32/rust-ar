@@ -38,13 +38,27 @@ impl<'a> Reader<'a> {
     }
 }
 
-fn read_decimal(data: &[u8]) -> usize {
+fn read_decimal(data: &[u8]) -> u64 {
     let mut val = 0;
     for b in data {
         match *b {
             b'0'...b'9' => {
                 val *= 10;
-                val += (*b - b'0') as usize;
+                val += (*b - b'0') as u64;
+            }
+            _ => break
+        }
+    }
+    val
+}
+
+fn read_octal(data: &[u8]) -> u64 {
+    let mut val = 0;
+    for b in data {
+        match *b {
+            b'0'...b'7' => {
+                val *= 8;
+                val += (*b - b'0') as u64;
             }
             _ => break
         }
@@ -56,7 +70,7 @@ impl<'a> Iterator for ReaderIter<'a> {
     type Item = File<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.data.len() >= 60 {
-            let len = read_decimal(&self.data[48..58]);
+            let len = read_decimal(&self.data[48..58]) as usize;
 
             let data = &self.data[..60+len];
 
@@ -88,7 +102,7 @@ impl<'a> File<'a> {
         File {
             inner_name_len:
                 if &data[0..3] == b"#1/" {
-                    Some(read_decimal(&data[3..16]))
+                    Some(read_decimal(&data[3..16]) as usize)
                 } else {
                     None
                 },
@@ -98,9 +112,7 @@ impl<'a> File<'a> {
 
     pub fn name_u8(&self) -> &'a [u8] {
         match self.inner_name_len {
-            Some(len) => {
-                &self.data[60..60+len]
-            }
+            Some(len) => &self.data[60..60+len],
             None => {
                 let mut len = 0;
                 while len < 16 && self.data[len] != b' ' {
@@ -114,6 +126,26 @@ impl<'a> File<'a> {
 
     pub fn name(&self) -> Option<&str> {
         str::from_utf8(self.name_u8()).ok()
+    }
+
+    pub fn contents(&self) -> &'a [u8] {
+        &self.data[60+self.inner_name_len.unwrap_or(0)..]
+    }
+
+    pub fn modified_timestamp(&self) -> u64 {
+        read_decimal(&self.data[16..16+12])
+    }
+
+    pub fn owner_id(&self) -> u32 {
+        read_decimal(&self.data[28..28+6]) as u32
+    }
+
+    pub fn group_id(&self) -> u32 {
+        read_decimal(&self.data[34..34+6]) as u32
+    }
+
+    pub fn file_mode(&self) -> u32 {
+        read_octal(&self.data[40..40+8]) as u32
     }
 }
 
