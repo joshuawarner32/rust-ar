@@ -115,7 +115,7 @@ impl<'a> File<'a> {
             Some(len) => &self.data[60..60+len],
             None => {
                 let mut len = 0;
-                while len < 16 && self.data[len] != b' ' {
+                while len < 16 && self.data[len] != b'/' {
                     len += 1;
                 }
 
